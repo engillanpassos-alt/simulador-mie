@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulador de Espalhamento de Mie</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#172033;background:#f3f6fb}
+*{box-sizing:border-box}body{margin:0;padding:18px}
+main{max-width:1100px;margin:auto}
+header,.panel{background:white;border:1px solid #dce3ee;border-radius:14px;padding:18px;margin-bottom:14px}
+h1{font-size:clamp(22px,4vw,32px);margin:0 0 7px}h2{font-size:18px;margin:0 0 14px}
+.sub{color:#5c687a;font-size:14px}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.control{background:#f7f9fc;padding:12px;border-radius:10px}
+.control label{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:600}
+input[type=range]{width:100%;margin-top:12px;accent-color:#2563eb}
+button{border:0;border-radius:8px;padding:10px 14px;background:#2563eb;color:white;font-weight:600;cursor:pointer;margin:5px 5px 0 0}
+button.secondary{background:#e8eef8;color:#24344e}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.metric{background:#f2f6fc;border-radius:10px;padding:12px}
+.metric span{display:block;color:#5c687a;font-size:12px}.metric strong{font-size:22px;display:block;margin-top:5px;overflow-wrap:anywhere}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+canvas{width:100%;height:300px;border:1px solid #e1e7f0;border-radius:10px;background:#fff}
+.note{font-size:13px;color:#596579;line-height:1.5}
+.status{padding:10px;border-radius:8px;background:#eef5ff;color:#1d477d;font-size:14px}
+@media(max-width:700px){body{padding:9px}.charts{grid-template-columns:1fr}canvas{height:260px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Simulador de Espalhamento de Mie</h1>
+<div class="sub">Laboratório virtual interativo · partículas esféricas · cálculo pelo método de Mie</div>
+</header>
+
+<section class="panel">
+<h2>1. Parâmetros físicos</h2>
+<div class="controls">
+<div class="control"><label>Comprimento de onda no vácuo <b id="lambdaVal">550 nm</b></label><input id="lambda" type="range" min="400" max="700" step="5" value="550"></div>
+<div class="control"><label>Índice real da partícula n <b id="nVal">1,33</b></label><input id="n" type="range" min="1.05" max="2.5" step="0.01" value="1.33"></div>
+<div class="control"><label>Índice imaginário k <b id="kVal">0,000</b></label><input id="k" type="range" min="0" max="0.5" step="0.005" value="0"></div>
+<div class="control"><label>Parâmetro de tamanho x <b id="xVal">0,10</b></label><input id="x" type="range" min="0.03" max="10" step="0.01" value="0.1"></div>
+</div>
+<div>
+<button class="secondary" data-x="0.1">Rayleigh (x = 0,1)</button>
+<button class="secondary" data-x="1">Transição (x = 1)</button>
+<button class="secondary" data-x="3">Mie (x = 3)</button>
+<button class="secondary" data-x="5">Partícula maior (x = 5)</button>
+</div>
+</section>
+
+<section class="panel">
+<h2>2. Resultados numéricos</h2>
+<div class="metrics">
+<div class="metric"><span>Raio da partícula</span><strong id="radius">—</strong></div>
+<div class="metric"><span>Qesp (espalhamento)</span><strong id="qsca">—</strong></div>
+<div class="metric"><span>Qabs (absorção)</span><strong id="qabs">—</strong></div>
+<div class="metric"><span>Qext (extinção)</span><strong id="qext">—</strong></div>
+<div class="metric"><span>Fator de assimetria g</span><strong id="g">—</strong></div>
+</div>
+<p id="regime" class="status">Calculando...</p>
+</section>
+
+<section class="panel">
+<h2>3. Gráficos</h2>
+<div class="charts">
+<div><h3>Distribuição angular</h3><canvas id="polar" width="600" height="430"></canvas><p class="note">Intensidade não polarizada normalizada. 0° representa a direção frontal; 180°, a direção traseira.</p></div>
+<div><h3>Eficiência versus tamanho</h3><canvas id="eff" width="600" height="430"></canvas><p class="note">A curva mostra Qesp e Qext em função do parâmetro de tamanho x. A linha vertical marca o valor selecionado.</p></div>
+</div>
+</section>
+
+<section class="panel">
+<h2>4. Comparação de dois casos</h2>
+<p class="note">Escolha dois valores de x para comparar partículas do mesmo material e sob a mesma iluminação.</p>
+<div class="controls">
+<div class="control"><label>Caso A — x <b id="xaVal">0,10</b></label><input id="xa" type="range" min="0.03" max="10" step="0.01" value="0.1"></div>
+<div class="control"><label>Caso B — x <b id="xbVal">3,00</b></label><input id="xb" type="range" min="0.03" max="10" step="0.01" value="3"></div>
+</div>
+<div style="overflow-x:auto"><table id="compare" style="width:100%;border-collapse:collapse;margin-top:12px;font-size:14px"></table></div>
+<h3>Comparação das distribuições angulares</h3><canvas id="comparePolar" width="900" height="430"></canvas><p class="note">As duas curvas são normalizadas pelo máximo de cada caso para comparar a forma da distribuição angular. 0° é a direção frontal e 180° a traseira.</p>
+</section>
+
+<section class="panel note">
+<b>Modelo e convenções</b><br>
+O meio externo é considerado ar, com índice de refração aproximadamente 1. O parâmetro de tamanho é x = 2πa/λ, em que a é o raio e λ é o comprimento de onda no meio externo. O índice complexo é representado por m = n + ik. As eficiências são adimensionais e Qext = Qesp + Qabs. O modelo considera esferas homogêneas, isoladas e iluminadas por uma onda plana.
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const C=(r,i=0)=>[r,i], add=(a,b)=>[a[0]+b[0],a[1]+b[1]], sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
+const mul=(a,b)=>[a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]];
+const div=(a,b)=>{let d=b[0]*b[0]+b[1]*b[1];return [(a[0]*b[0]+a[1]*b[1])/d,(a[1]*b[0]-a[0]*b[1])/d]};
+const sc=(a,s)=>[a[0]*s,a[1]*s], abs2=a=>a[0]*a[0]+a[1]*a[1];
+const csin=z=>[Math.sin(z[0])*Math.cosh(z[1]),Math.cos(z[0])*Math.sinh(z[1])];
+const ccos=z=>[Math.cos(z[0])*Math.cosh(z[1]),-Math.sin(z[0])*Math.sinh(z[1])];
+function psi(z,N){let p=[csin(z),sub(div(csin(z),z),ccos(z))];for(let j=1;j<N;j++)p.push(sub(mul(div(C(2*j+1),z),p[j]),p[j-1]));return p}
+function xi(x,N){let p=[C(Math.sin(x),-Math.cos(x)),C(Math.sin(x)/x-Math.cos(x),-Math.cos(x)/x-Math.sin(x))];for(let j=1;j<N;j++)p.push(sub(sc(p[j],(2*j+1)/x),p[j-1]));return p}
+function mie(x,n,k,angular=true){
+ const N=Math.max(3,Math.ceil(x+4*Math.cbrt(x)+2)),m=C(n,k),mx=sc(m,x),px=psi(C(x),N),pm=psi(mx,N),xx=xi(x,N),aa=[],bb=[];
+ let qext=0,qsca=0;
+ for(let j=1;j<=N;j++){
+  const dx=sub(px[j-1],sc(px[j],j/x));
+  const dm=sub(pm[j-1],div(sc(pm[j],j),mx));
+  const dxx=sub(xx[j-1],sc(xx[j],j/x));
+  const an=div(sub(mul(m,mul(pm[j],dx)),mul(px[j],dm)),sub(mul(m,mul(pm[j],dxx)),mul(xx[j],dm)));
+  const bn=div(sub(mul(pm[j],dx),mul(m,mul(px[j],dm))),sub(mul(pm[j],dxx),mul(m,mul(xx[j],dm))));
+  aa.push(an);bb.push(bn);qext+=(2*j+1)*(an[0]+bn[0]);qsca+=(2*j+1)*(abs2(an)+abs2(bn));
+ }
+ qext*=2/(x*x);qsca*=2/(x*x);
+ let sum=0;
+ for(let j=1;j<N;j++)sum+=j*(j+2)/(j+1)*(aa[j-1][0]*aa[j][0]+aa[j-1][1]*aa[j][1]+bb[j-1][0]*bb[j][0]+bb[j-1][1]*bb[j][1]);
+ for(let j=1;j<=N;j++)sum+=(2*j+1)/(j*(j+1))*(aa[j-1][0]*bb[j-1][0]+aa[j-1][1]*bb[j-1][1]);
+ const g=qsca?4*sum/(x*x*qsca):0, qabs=Math.max(0,qext-qsca);
+ let angles=[],intens=[];
+ if(angular){
+  for(let deg=0;deg<=180;deg+=1){
+   let mu=Math.cos(deg*Math.PI/180),p0=0,p1=1,s1=C(0),s2=C(0);
+   for(let j=1;j<=N;j++){
+    let pi=j===1?1:p1,tau=j*mu*pi-(j+1)*p0,f=(2*j+1)/(j*(j+1));
+    s1=add(s1,sc(add(sc(aa[j-1],pi),sc(bb[j-1],tau)),f));
+    s2=add(s2,sc(add(sc(aa[j-1],tau),sc(bb[j-1],pi)),f));
+    let pn=(2*j+1)/j*mu*pi-(j+1)/j*p0;p0=pi;p1=pn;
+   }
+   angles.push(deg);intens.push((abs2(s1)+abs2(s2))/2);
+  }
+ }
+ return {qext,qsca,qabs,g,angles,intens};
+}
+function fmt(v){return Number.isFinite(v)?v.toPrecision(5):"—"}
+function get(){return {lam:+$('lambda').value,n:+$('n').value,k:+$('k').value,x:+$('x').value}}
+function drawPolar(c){
+ let cv=$('polar'),ctx=cv.getContext('2d'),W=cv.width,H=cv.height,cx=W/2,cy=H-35,R=Math.min(W*.42,H-65),max=Math.max(...c.intens,1e-30);
+ ctx.clearRect(0,0,W,H);ctx.strokeStyle='#d5dce7';ctx.lineWidth=1;
+ for(let r of [.25,.5,.75,1]){ctx.beginPath();ctx.arc(cx,cy,R*r,Math.PI,2*Math.PI);ctx.stroke()}
+ ctx.beginPath();ctx.moveTo(cx-R,cy);ctx.lineTo(cx+R,cy);ctx.stroke();
+ ctx.beginPath();c.intens.forEach((v,i)=>{let t=i*Math.PI/(c.intens.length-1),r=R*(v/max),xx=cx+r*Math.cos(t),yy=cy-r*Math.sin(t);i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});ctx.strokeStyle='#2675cf';ctx.lineWidth=3;ctx.stroke();
+ ctx.fillStyle='#334155';ctx.font='16px Arial';ctx.fillText('180° · trás',cx-R,cy+23);ctx.fillText('0° · frente',cx+R-90,cy+23);ctx.fillText('90°',cx-12,cy-R-12);
+}
+function drawEff(v){
+ let cv=$('eff'),ctx=cv.getContext('2d'),W=cv.width,H=cv.height,L=65,R=20,T=22,B=55;
+ ctx.clearRect(0,0,W,H);let data=[],max=0;
+ for(let i=0;i<90;i++){let x=.03*Math.pow(20/.03,i/89),z=mie(x,v.n,v.k,false);data.push([x,z.qsca,z.qext]);max=Math.max(max,z.qsca,z.qext)}
+ max=Math.max(2,max)*1.08;
+ const X=x=>L+(Math.log(x/.03)/Math.log(20/.03))*(W-L-R),Y=y=>H-B-y/max*(H-T-B);
+ ctx.strokeStyle='#dbe2eb';ctx.fillStyle='#526174';ctx.font='14px Arial';
+ for(let j=0;j<=4;j++){let y=max*j/4;ctx.beginPath();ctx.moveTo(L,Y(y));ctx.lineTo(W-R,Y(y));ctx.stroke();ctx.fillText(y.toFixed(1),12,Y(y)+5)}
+ ctx.beginPath();data.forEach((d,i)=>i?ctx.lineTo(X(d[0]),Y(d[1])):ctx.moveTo(X(d[0]),Y(d[1])));ctx.strokeStyle='#2675cf';ctx.lineWidth=3;ctx.stroke();
+ ctx.beginPath();data.forEach((d,i)=>i?ctx.lineTo(X(d[0]),Y(d[2])):ctx.moveTo(X(d[0]),Y(d[2])));ctx.strokeStyle='#e18a35';ctx.lineWidth=3;ctx.stroke();
+ ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(X(v.x),T);ctx.lineTo(X(v.x),H-B);ctx.strokeStyle='#27364b';ctx.stroke();ctx.setLineDash([]);
+ ctx.fillStyle='#334155';ctx.fillText('Parâmetro x (escala logarítmica)',W/2-100,H-12);
+ ctx.fillStyle='#2675cf';ctx.fillText('— Qesp',L+10,T+15);ctx.fillStyle='#e18a35';ctx.fillText('— Qext',L+100,T+15);
+}
+function drawComparisonPolar(a,b){
+ let cv=$('comparePolar'),ctx=cv.getContext('2d'),W=cv.width,H=cv.height,cx=W/2,cy=H-35,R=Math.min(W*.42,H-65);
+ ctx.clearRect(0,0,W,H);ctx.strokeStyle='#d5dce7';ctx.lineWidth=1;
+ for(let r of [.25,.5,.75,1]){ctx.beginPath();ctx.arc(cx,cy,R*r,Math.PI,2*Math.PI);ctx.stroke()}
+ ctx.beginPath();ctx.moveTo(cx-R,cy);ctx.lineTo(cx+R,cy);ctx.stroke();
+ const maxA=Math.max(...a.intens,1e-30),maxB=Math.max(...b.intens,1e-30);
+ [[a,maxA,'#2675cf'],[b,maxB,'#e18a35']].forEach(([c,mx,color])=>{
+  ctx.beginPath();c.intens.forEach((v,i)=>{let t=i*Math.PI/(c.intens.length-1),r=R*v/mx,xx=cx+r*Math.cos(t),yy=cy-r*Math.sin(t);i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});ctx.strokeStyle=color;ctx.lineWidth=3;ctx.stroke();
+ });
+ ctx.fillStyle='#334155';ctx.font='16px Arial';ctx.fillText('180° · trás',cx-R,cy+23);ctx.fillText('0° · frente',cx+R-90,cy+23);ctx.fillText('90°',cx-12,cy-R-12);
+ ctx.fillStyle='#2675cf';ctx.fillText('— Caso A',W-210,30);ctx.fillStyle='#e18a35';ctx.fillText('— Caso B',W-110,30);
+}
+function update(){
+ const v=get();$('lambdaVal').textContent=v.lam+' nm';$('nVal').textContent=v.n.toFixed(2).replace('.',',');$('kVal').textContent=v.k.toFixed(3).replace('.',',');$('xVal').textContent=v.x.toFixed(2).replace('.',',');
+ const z=mie(v.x,v.n,v.k),radius=v.x*v.lam/(2*Math.PI);
+ $('radius').textContent=radius.toFixed(3)+' nm';$('qsca').textContent=fmt(z.qsca);$('qabs').textContent=fmt(z.qabs);$('qext').textContent=fmt(z.qext);$('g').textContent=fmt(z.g);
+ $('regime').textContent=v.x<.3?'Regime de Rayleigh: partícula muito menor que o comprimento de onda.':v.x<2?'Região de transição: tamanho começa a ser comparável ao comprimento de onda.':'Regime de Mie: efeitos multipolares e espalhamento frontal podem ser importantes.';
+ drawPolar(z);drawEff(v);comparison();
+}
+function comparison(){
+ const lam=+$('lambda').value,n=+$('n').value,k=+$('k').value,xa=+$('xa').value,xb=+$('xb').value;
+ $('xaVal').textContent=xa.toFixed(2);$('xbVal').textContent=xb.toFixed(2);
+ let a=mie(xa,n,k,true),b=mie(xb,n,k,true);
+ const rows=[['Grandeza','Caso A','Caso B'],['Raio (nm)',(xa*lam/(2*Math.PI)).toFixed(3),(xb*lam/(2*Math.PI)).toFixed(3)],['Qesp',fmt(a.qsca),fmt(b.qsca)],['Qabs',fmt(a.qabs),fmt(b.qabs)],['Qext',fmt(a.qext),fmt(b.qext)],['g',fmt(a.g),fmt(b.g)]];
+ $('compare').innerHTML=rows.map((r,i)=>'<tr>'+r.map(c=>`<td style="padding:9px;border-bottom:1px solid #e2e8f0;${i===0?'font-weight:bold;background:#f2f6fc':''}">${c}</td>`).join('')+'</tr>').join('');drawComparisonPolar(a,b);
+}
+['lambda','n','k','x','xa','xb'].forEach(id=>$(id).addEventListener('input',update));
+document.querySelectorAll('button[data-x]').forEach(b=>b.addEventListener('click',()=>{$('x').value=b.dataset.x;update()}));
+window.addEventListener('resize',update);update();
+</script>
+</body>
+</html>
